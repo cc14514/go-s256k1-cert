@@ -9,7 +9,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"fmt"
 	uuid "github.com/satori/go.uuid"
 	"math/big"
 	"time"
@@ -109,7 +108,6 @@ func (self *ECCKeytool) GenCertForPubkey(prvkey *ecdsa.PrivateKey, caCert *x509.
 	if caCert == nil {
 		caCert = certTemplate
 	}
-	fmt.Println("---------------------------------CA---------------------------------", certTemplate.IsCA, caCert.IsCA)
 	certBuf, err := x509.CreateCertificate(rand.Reader, certTemplate, caCert, userPubkey, prvkey)
 	if err != nil {
 		panic(err)
