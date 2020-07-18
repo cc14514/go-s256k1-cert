@@ -3,9 +3,11 @@ package example
 import (
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"io/ioutil"
 	"testing"
 	"time"
 )
@@ -14,59 +16,60 @@ var (
 	pwd      = "123456"
 	caKeyPem = `-----BEGIN ECC PRIVATE KEY-----
 Proc-Type: 4,ENCRYPTED
-DEK-Info: AES-128-CBC,a253c18bb0a4d099e27b6294a840eecd
+DEK-Info: AES-128-CBC,57600d03c7bc2b496c3e301ad1037b89
 
-xgCvhe9ig93vx1cupvvBnRI3olwWAa5SpBzD2+bw9P50JWpM5aJTSKsCNoZBitJQ
-fPUraQmQmgzNOshFOgXDCTCQRLppIidPpbYO7tbezMJK9tl1v2XwUO3VETySZH+S
-9xDeXlAHHmuRpjLR3ATYrp3v1MKJWsUtSAaU22DdddI=
+8EoWxS2hyM9ftM8Q4R7vM3zuMt2q8QpiFP7irOY9jgmSSHBDO21uDyW93V+59O8c
+6UR9NpNi8F0w5lP4xXkjdtDb6S25tEitrPMBGWnbnIGkqrUl1PLXa9dLtRxVMxYM
+IJfC9eLFFIqcQVAEU6VJ2tD7oikFd89/RhZQ9F5rVFs=
 -----END ECC PRIVATE KEY-----
 
 -----BEGIN ECC PUBLIC KEY-----
-MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQgDQgAE/ePSyLE7+hGx/bhNp3wkzNKu3u0R
-QppfTzILmdlBRIHGlr/zBzzksz4LnbpOfg5i3cjO8eWYwwkTbAkfaEV9vw==
+MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEUQMFuiWK6enMEZuGr7yoMXxaJ2OF42be
+ufKu/XTDIwNEFjf64iaTgdlfinWQ1fcRQOypoyEulQhSjxw0E8Nauw==
 -----END ECC PUBLIC KEY-----
 `
 	caCertPem = `-----BEGIN CERTIFICATE-----
-MIIB1DCCAXqgAwIBAgIQAIfBK10cTFa2cJGe3TycijAKBggqhkjOPQQDAjBKMQ8w
-DQYDVQQGDAbkuK3lm70xDzANBgNVBAoMBue7hOe7hzEVMBMGA1UECwwM57uE57uH
-5Y2V5L2NMQ8wDQYDVQQDDAbkvaDlpb0wHhcNMjAwNzEzMDg0MTMyWhcNMzAwNzEx
-MDg0MTMyWjBKMQ8wDQYDVQQGDAbkuK3lm70xDzANBgNVBAoMBue7hOe7hzEVMBMG
-A1UECwwM57uE57uH5Y2V5L2NMQ8wDQYDVQQDDAbkvaDlpb0wWTATBgcqhkjOPQIB
-BggqhkjOPQMBCANCAAT949LIsTv6EbH9uE2nfCTM0q7e7RFCml9PMguZ2UFEgcaW
-v/MHPOSzPguduk5+DmLdyM7x5ZjDCRNsCR9oRX2/o0IwQDAOBgNVHQ8BAf8EBAMC
-AZYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHREEFjAUgRJjYzE0NTE0QGljbG91ZC5j
-b20wCgYIKoZIzj0EAwIDSAAwRQIhAPe1J+cH7kSfCvrAesLewKLG+dRrwtbtwnsa
-3qKFMzMDAiAw89EB0X6lij2/3f31lzb0GDWYeL53LcJbwD828Q7Rzw==
+MIIB0TCCAXigAwIBAgIRANz9PDono0ejr34Uad02c+MwCgYIKoZIzj0EAwIwSjEP
+MA0GA1UEBgwG5Lit5Zu9MQ8wDQYDVQQKDAbnu4Tnu4cxFTATBgNVBAsMDOe7hOe7
+h+WNleS9jTEPMA0GA1UEAwwG5L2g5aW9MB4XDTIwMDcxNzA1MjcyNloXDTMwMDcx
+NTA1MjcyNlowSjEPMA0GA1UEBgwG5Lit5Zu9MQ8wDQYDVQQKDAbnu4Tnu4cxFTAT
+BgNVBAsMDOe7hOe7h+WNleS9jTEPMA0GA1UEAwwG5L2g5aW9MFYwEAYHKoZIzj0C
+AQYFK4EEAAoDQgAEUQMFuiWK6enMEZuGr7yoMXxaJ2OF42beufKu/XTDIwNEFjf6
+4iaTgdlfinWQ1fcRQOypoyEulQhSjxw0E8Nau6NCMEAwDgYDVR0PAQH/BAQDAgGW
+MA8GA1UdEwEB/wQFMAMBAf8wHQYDVR0RBBYwFIESY2MxNDUxNEBpY2xvdWQuY29t
+MAoGCCqGSM49BAMCA0cAMEQCIFc5QiMK73yh3NoU96sEGYwDmLhKvS+ZrchZWyAh
+lT10AiACJH/zgPVYzul5zhsOq9vc3vuRSZ+fX7FS7TFDBMuTWA==
 -----END CERTIFICATE-----
 `
 
 	userKeyPem = `-----BEGIN ECC PRIVATE KEY-----
 Proc-Type: 4,ENCRYPTED
-DEK-Info: AES-128-CBC,3399785f0aa46d0a75562a458d96eaa6
+DEK-Info: AES-128-CBC,909ca5b2066d18932a3074058e20f1fd
 
-kfzLHj85tX/3YMxiSsvL+yte7SgESxJrhN7ZmThRevI/v3MqW6jZ4xmlu2Nt72HI
-i8VZKiY5ey9X4jzKddB4ylWBaabbdBNQVPSOj2byV9xwmhC/W4JYsfrRVG9JO0Ea
-6OJyZL435MRJL7SdotGJHhdZooPsddz63NwqcvAj5ZM=
+VSEu1tS4jKptoXO8AByRvRBTGx6NZMCBliwT4DlmsbkJXv6EZQBVqnkxr8DM8mOp
+P94NS7z2IYxPjDT/t5wG7KIYts/hIwo6BvM7kzEkMws2cpBlMTkWLTPvmarkl54p
+JWI3OZOFCPYPpsgTnKgYpB0Kq/MU7EYgFkBTqXZdYp8=
 -----END ECC PRIVATE KEY-----
 
 -----BEGIN ECC PUBLIC KEY-----
-MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQgDQgAEJC15ckFw+3jJNyj1IqhqCz4/9X9b
-cn4e47nSrvUiENL76YbmlqsCE1NZl/Xq+2jdsTnohXvyVp3czAFRjXJOqg==
+MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEmrgTlwGqepeCgGjg+HIryk9NqsG3hLp4
+LXMHorL17955PjDRiubxJooDIJGNsqfxfeeq0UFEzRzbc1F60JM0Xw==
 -----END ECC PUBLIC KEY-----
 `
 	userCertPem = `-----BEGIN CERTIFICATE-----
-MIIBuDCCAV+gAwIBAgIRANTNfKSeJU27kYfEwGErb+swCgYIKoZIzj0EAwIwSjEP
+MIIBtjCCAVygAwIBAgIRALcgBnxhpEA0r3XC1OcL4iEwCgYIKoZIzj0EAwIwSjEP
 MA0GA1UEBgwG5Lit5Zu9MQ8wDQYDVQQKDAbnu4Tnu4cxFTATBgNVBAsMDOe7hOe7
-h+WNleS9jTEPMA0GA1UEAwwG5L2g5aW9MB4XDTIwMDcxMzA4NDIwNFoXDTMwMDcx
-MTA4NDIwNFowRzEPMA0GA1UEBgwG5Lit5Zu9MRIwEAYDVQQKDAnnsr7mrabpl6gx
-DzANBgNVBAsMBuaxn+a5ljEPMA0GA1UEAwwG6ZmI55yfMFkwEwYHKoZIzj0CAQYI
-KoZIzj0DAQgDQgAELN9p1GePslXHF9VM9FMrp3LQJxj5NRqBwjr4+zxeSOpFYfd1
-i9NSov2o0XqA+5zt9uqEnJZ6ehNM7iK5yghsP6MpMCcwDgYDVR0PAQH/BAQDAgSw
-MBUGA1UdEQQOMAyBCmN6QGp3bS5jb20wCgYIKoZIzj0EAwIDRwAwRAIgKLcu0UqM
-VSotaUQN7tjamE+PLJBVt9auTD62wLXJYHQCIDObfn2caWjtWSuJprDP1Huaxf5s
-pfxJyzNEIQ+AHKR9
+h+WNleS9jTEPMA0GA1UEAwwG5L2g5aW9MB4XDTIwMDcxNzA1MjcyNloXDTMwMDcx
+NTA1MjcyNlowRzEPMA0GA1UEBgwG5Lit5Zu9MRIwEAYDVQQKDAnnsr7mrabpl6gx
+DzANBgNVBAsMBuaxn+a5ljEPMA0GA1UEAwwG6ZmI55yfMFYwEAYHKoZIzj0CAQYF
+K4EEAAoDQgAEmrgTlwGqepeCgGjg+HIryk9NqsG3hLp4LXMHorL17955PjDRiubx
+JooDIJGNsqfxfeeq0UFEzRzbc1F60JM0X6MpMCcwDgYDVR0PAQH/BAQDAgSwMBUG
+A1UdEQQOMAyBCmN6QGp3bS5jb20wCgYIKoZIzj0EAwIDSAAwRQIgIaFwCJChgxSM
+y7m8b0vNK6tC9ySpq9NifMk2UPqa090CIQDRRllF+O3UGaLwTEBGkyoIl2fBaqdY
+wicfuwjfHeYr8A==
 -----END CERTIFICATE-----
 `
+
 	kt          = NewKeytool()
 	prvkeyByPem = func(keyPem, pwd string) *ecdsa.PrivateKey {
 		prvBlk, _ := pem.Decode([]byte(keyPem))
@@ -84,7 +87,7 @@ pfxJyzNEIQ+AHKR9
 
 // 创建一个 ECC S256K1 私钥，用于生成证书，以 PEM 格式返回
 func TestECCKeytool_GenKey(t *testing.T) {
-	prv, pub := kt.GenKey(pwd)
+	prv, pub := kt.GenKey(elliptic.S256(), pwd)
 	fmt.Println(string(prv))
 	fmt.Println(string(pub))
 }
@@ -102,7 +105,7 @@ func TestECCKeytool_GenCertForPubkeyForCA(t *testing.T) {
 }
 
 func TestECCKeytool_GenCertForPubkeyForUser(t *testing.T) {
-	userPrv, userPub := kt.GenKey(pwd)
+	userPrv, userPub := kt.GenKey(elliptic.S256(), pwd)
 	// 输出用户密钥 >>>>>>>>
 	fmt.Println(string(userPrv))
 	fmt.Println(string(userPub))
@@ -173,4 +176,58 @@ func TestVerifyUserCert(t *testing.T) {
 	fmt.Println("check sign :", err)
 	// 验证父证书签名 <<<<
 
+}
+
+func TestAll(t *testing.T) {
+	curve := elliptic.S256()
+	caKeyPem, pub := kt.GenKey(curve, pwd)
+	fmt.Println("==================================================================== ca key")
+	fmt.Println(string(caKeyPem))
+	fmt.Println(string(pub))
+	fmt.Println("==================================================================== ca cert")
+
+	prv := prvkeyByPem(string(caKeyPem), pwd)
+	caCertPem := kt.GenCertForPubkey(prv, nil, prv.Public(), &Subject{
+		Country:            "中国",
+		OrganizationalUnit: "组织单位",
+		Organization:       "组织",
+		CommonName:         "你好",
+		Email:              "cc14514@icloud.com",
+	})
+	fmt.Println(string(caCertPem))
+	ioutil.WriteFile("/tmp/ca.pem", caCertPem, 0644)
+
+	fmt.Println("==================================================================== user key")
+	userPrv, userPub := kt.GenKey(curve, pwd)
+	// 输出用户密钥 >>>>>>>>
+	fmt.Println(string(userPrv))
+	fmt.Println(string(userPub))
+	// 输出用户密钥 <<<<<<<<
+	// 解析 PEM 公钥 >>>>>>
+	fmt.Println("==================================================================== user cert")
+	userPubBlk, _ := pem.Decode(userPub)
+	ipub, err := x509.ParsePKIXPublicKey(userPubBlk.Bytes)
+	if err != nil {
+		panic(err)
+	}
+	upub := ipub.(crypto.PublicKey)
+	// 解析 PEM 公钥 <<<<<<
+
+	// 解析 CA 证书和密钥并对用户 pubkey 签发证书 >>>>
+	caCertBlk, _ := pem.Decode([]byte(caCertPem))
+	caCert, err := x509.ParseCertificate(caCertBlk.Bytes)
+	if err != nil {
+		panic(err)
+	}
+	caPrv := prvkeyByPem(string(caKeyPem), pwd)
+	userCertPem := kt.GenCertForPubkey(caPrv, caCert, upub, &Subject{
+		Country:            "中国",
+		OrganizationalUnit: "江湖",
+		Organization:       "精武门",
+		CommonName:         "陈真",
+		Email:              "cz@jwm.com",
+	})
+	fmt.Println(string(userCertPem))
+	ioutil.WriteFile("/tmp/user.pem", userCertPem, 0644)
+	// 解析 CA 证书和密钥并对用户 pubkey 签发证书 <<<<
 }

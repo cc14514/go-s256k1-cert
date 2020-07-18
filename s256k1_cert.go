@@ -64,8 +64,8 @@ func NewKeytool() *ECCKeytool {
 }
 
 // 创建一个 ECC S256K1 私钥，用于生成证书，以 PEM 格式返回
-func (self *ECCKeytool) GenKey(pwd string) (privRaw, pubRaw []byte) {
-	priv, _ := ecdsa.GenerateKey(elliptic.S256(), rand.Reader)
+func (self *ECCKeytool) GenKey(curve elliptic.Curve, pwd string) (privRaw, pubRaw []byte) {
+	priv, _ := ecdsa.GenerateKey(curve, rand.Reader)
 	bpriv, _ := x509.MarshalECPrivateKey(priv)
 	pemblock, _ := x509.EncryptPEMBlock(rand.Reader, self.keyTitle, bpriv, []byte(pwd), self.agl)
 	buf := new(bytes.Buffer)
