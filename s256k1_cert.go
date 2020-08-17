@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	TITLE_PUB = "ECC PUBLIC KEY"
-	TITLE_KEY = "ECC PRIVATE KEY"
+	TITLE_PUB = "EC PUBLIC KEY"
+	TITLE_KEY = "EC PRIVATE KEY"
 	TITLE_CSR = "CERTIFICATE REQUEST"
 	TITLE_CRT = "CERTIFICATE"
 )
@@ -36,7 +36,7 @@ func (subject *Subject) tox() pkix.Name {
 		Country:            []string{subject.Country},            // 国家地区
 		OrganizationalUnit: []string{subject.OrganizationalUnit}, // 组织单位
 		Organization:       []string{subject.Organization},       // 组织
-		CommonName:         subject.CommonName,                   // IDB58 编码的 ECS256 Pubkey
+		CommonName:         subject.CommonName,
 	}
 }
 
@@ -95,6 +95,7 @@ func (self *ECCKeytool) GenCertForPubkey(prvkey *ecdsa.PrivateKey, caCert *x509.
 		NotBefore:      time.Now(),                                // 在此之前无效
 		NotAfter:       time.Now().Add(10 * 365 * 24 * time.Hour), // 在此之后无效
 		EmailAddresses: []string{subject.Email},
+		OCSPServer:     []string{"http://www.pdx.ltd"}, // for test
 	}
 
 	if prvkey.Public() == userPubkey {

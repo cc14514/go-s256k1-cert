@@ -5,8 +5,11 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/asn1"
 	"encoding/pem"
 	"fmt"
+	"golang.org/x/crypto/ocsp"
 	"io/ioutil"
 	"testing"
 	"time"
@@ -179,11 +182,12 @@ func TestVerifyUserCert(t *testing.T) {
 }
 
 func TestAll(t *testing.T) {
-	curve := elliptic.S256()
-	caKeyPem, pub := kt.GenKey(curve, pwd)
+	caKeyPem, pub := kt.GenKey(elliptic.P256(), pwd)
 	fmt.Println("==================================================================== ca key")
 	fmt.Println(string(caKeyPem))
 	fmt.Println(string(pub))
+	ioutil.WriteFile("/tmp/ca.key", caKeyPem, 0644)
+	ioutil.WriteFile("/tmp/ca.pass", []byte(pwd), 0644)
 	fmt.Println("==================================================================== ca cert")
 
 	prv := prvkeyByPem(string(caKeyPem), pwd)
@@ -198,10 +202,12 @@ func TestAll(t *testing.T) {
 	ioutil.WriteFile("/tmp/ca.pem", caCertPem, 0644)
 
 	fmt.Println("==================================================================== user key")
-	userPrv, userPub := kt.GenKey(curve, pwd)
+	userPrv, userPub := kt.GenKey(elliptic.P256(), pwd)
 	// 输出用户密钥 >>>>>>>>
 	fmt.Println(string(userPrv))
 	fmt.Println(string(userPub))
+	ioutil.WriteFile("/tmp/user.key", userPrv, 0644)
+	ioutil.WriteFile("/tmp/user.pass", []byte(pwd), 0644)
 	// 输出用户密钥 <<<<<<<<
 	// 解析 PEM 公钥 >>>>>>
 	fmt.Println("==================================================================== user cert")
@@ -224,10 +230,138 @@ func TestAll(t *testing.T) {
 		Country:            "中国",
 		OrganizationalUnit: "江湖",
 		Organization:       "精武门",
-		CommonName:         "陈真",
+		CommonName:         "helloworld.com",
 		Email:              "cz@jwm.com",
 	})
 	fmt.Println(string(userCertPem))
 	ioutil.WriteFile("/tmp/user.pem", userCertPem, 0644)
 	// 解析 CA 证书和密钥并对用户 pubkey 签发证书 <<<<
+
+	userCertPemBlk, _ := pem.Decode(userCertPem)
+
+	userCert, err := x509.ParseCertificate(userCertPemBlk.Bytes)
+	t.Log(err, userCert.OCSPServer)
+}
+
+func TestOcsp(t *testing.T) {
+	// 加载用户证书 >>>>
+	userCertBlk, _ := pem.Decode([]byte(userCertPem))
+	userCert, err := x509.ParseCertificate(userCertBlk.Bytes)
+	if err != nil {
+		panic(err)
+	}
+	// 加载用户证书 <<<<
+
+	// 加载 CA 证书 >>>>
+	caCertBlk, _ := pem.Decode([]byte(caCertPem))
+	caCert, err := x509.ParseCertificate(caCertBlk.Bytes)
+	if err != nil {
+		panic(err)
+	}
+	// 加载 CA 证书 <<<<
+	t.Log("user", userCert.SerialNumber, "ca", caCert.SerialNumber, caCert.Subject.String())
+	ocspReq, err := ocsp.CreateRequest(userCert, caCert, nil)
+	t.Log(err, ocspReq)
+	req, _ := ocsp.ParseRequest(ocspReq)
+
+	// IssuerNameHash = Hash(DN) , DN = RawSubject
+	// IssuerKeyHash = Hash(Publickey) , Publickey = RawSubjectPublicKeyInfo.PublicKey
+	t.Log(req.IssuerNameHash, req.IssuerKeyHash, req.SerialNumber)
+
+	hasher := req.HashAlgorithm.New()
+	hasher.Write(caCert.RawSubject)
+	h1 := hasher.Sum(nil)
+
+	var publicKeyInfo struct {
+		Algorithm pkix.AlgorithmIdentifier
+		PublicKey asn1.BitString
+	}
+	if _, err := asn1.Unmarshal(caCert.RawSubjectPublicKeyInfo, &publicKeyInfo); err != nil {
+		t.Error(err)
+	}
+	hasher.Reset()
+	hasher.Write(publicKeyInfo.PublicKey.RightAlign())
+	h2 := hasher.Sum(nil)
+
+	t.Log(h1, h2)
+
+}
+
+func TestSignCert(t *testing.T) {
+	caKeyPem, err := ioutil.ReadFile("/Users/liangc/certs/ca.key")
+	if err != nil {
+		panic(err)
+	}
+	caPrv := prvkeyByPem(string(caKeyPem), pwd)
+
+	fmt.Println("==================================================================== client key")
+	userPrv, userPub := kt.GenKey(elliptic.S256(), pwd)
+	// 输出用户密钥 >>>>>>>>
+	fmt.Println(string(userPrv))
+	fmt.Println(string(userPub))
+	ioutil.WriteFile("/tmp/client.key", userPrv, 0644)
+	ioutil.WriteFile("/tmp/client.pass", []byte(pwd), 0644)
+	// 输出用户密钥 <<<<<<<<
+	// 解析 PEM 公钥 >>>>>>
+	fmt.Println("==================================================================== client cert")
+	userPubBlk, _ := pem.Decode(userPub)
+	ipub, err := x509.ParsePKIXPublicKey(userPubBlk.Bytes)
+	if err != nil {
+		panic(err)
+	}
+	upub := ipub.(crypto.PublicKey)
+	// 解析 PEM 公钥 <<<<<<
+
+	// 解析 CA 证书和密钥并对用户 pubkey 签发证书 >>>>
+	caCertBlk, _ := pem.Decode([]byte(caCertPem))
+	caCert, err := x509.ParseCertificate(caCertBlk.Bytes)
+	if err != nil {
+		panic(err)
+	}
+	userCertPem := kt.GenCertForPubkey(caPrv, caCert, upub, &Subject{
+		Country:            "中国",
+		OrganizationalUnit: "江湖",
+		Organization:       "精武门",
+		CommonName:         "liangc-client-test",
+		Email:              "cz@jwm.com",
+	})
+	fmt.Println(string(userCertPem))
+	ioutil.WriteFile("/tmp/client.pem", userCertPem, 0644)
+	// 解析 CA 证书和密钥并对用户 pubkey 签发证书 <<<<
+
+	userCertPemBlk, _ := pem.Decode(userCertPem)
+
+	userCert, err := x509.ParseCertificate(userCertPemBlk.Bytes)
+	t.Log(err, userCert.OCSPServer)
+}
+
+func TestLoadKey(t *testing.T) {
+	userPrv, err := ioutil.ReadFile("/tmp/user.key")
+	if err != nil {
+		panic(err)
+	}
+	userPrvBlk, _ := pem.Decode(userPrv)
+	userPrvBuf, err := x509.DecryptPEMBlock(userPrvBlk, []byte(pwd))
+	if err != nil {
+		panic(err)
+	}
+	uprv, err := x509.ParseECPrivateKey(userPrvBuf)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(uprv)
+
+}
+
+func TestShow(t *testing.T) {
+	data, err := ioutil.ReadFile("/Users/liangc/certs/user.pem")
+	if err != nil {
+		panic(err)
+	}
+	blk, _ := pem.Decode(data)
+	crt, err := x509.ParseCertificate(blk.Bytes)
+	if err != nil {
+		panic(err)
+	}
+	t.Log(crt.SerialNumber)
 }
